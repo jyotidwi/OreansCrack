@@ -38,5 +38,8 @@
     <ClInclude Include="Terminal\Terminal.h">
       <Filter>Terminal</Filter>
     </ClInclude>
+    <ClInclude Include="CompileStackString.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

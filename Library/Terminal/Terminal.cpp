@@ -62,26 +62,26 @@ namespace Terminal {
 			return true;
 		}
 
-		if (m_IO.m_pIN) {
-			if (_tfreopen_s(&m_IO.m_pIN, _T("nul"), _T("r"), stdin)) {
-				return false;
-			}
-
-			if (m_IO.m_pIN) {
-				fclose(m_IO.m_pIN);
-				m_IO.m_pIN = nullptr;
-			}
+		if (m_IO.m_pIN && (m_IO.m_pIN != stdin) && (m_IO.m_pIN != stdout) && (m_IO.m_pIN != stderr)) {
+			fclose(m_IO.m_pIN);
 		}
 
-		if (m_IO.m_pOUT) {
-			if (_tfreopen_s(&m_IO.m_pOUT, _T("nul"), _T("w"), stdout)) {
-				return false;
-			}
+		m_IO.m_pIN = nullptr;
 
-			if (m_IO.m_pOUT) {
-				fclose(m_IO.m_pOUT);
-				m_IO.m_pOUT = nullptr;
-			}
+		if (m_IO.m_pOUT && (m_IO.m_pOUT != stdin) && (m_IO.m_pOUT != stdout) && (m_IO.m_pOUT != stderr)) {
+			fclose(m_IO.m_pOUT);
+		}
+
+		m_IO.m_pOUT = nullptr;
+
+		{
+			FILE* tmp = nullptr;
+			_tfreopen_s(&tmp, _T("nul"), _T("r"), stdin);
+			_tfreopen_s(&tmp, _T("nul"), _T("w"), stdout);
+			_tfreopen_s(&tmp, _T("nul"), _T("w"), stderr);
+			setvbuf(stdin, nullptr, _IONBF, 0);
+			setvbuf(stdout, nullptr, _IONBF, 0);
+			setvbuf(stderr, nullptr, _IONBF, 0);
 		}
 
 		if (!AllocConsole()) {
@@ -90,83 +90,57 @@ namespace Terminal {
 
 		m_hWindow = GetConsoleWindow();
 		if (!m_hWindow) {
+			FreeConsole();
 			return false;
 		}
 
 		if (bUpdateIO) {
-			if (_tfreopen_s(&m_IO.m_pIN, _T("nul"), _T("r"), stdin)) {
+			FILE* tmp = nullptr;
+
+			if (_tfreopen_s(&tmp, _T("CONIN$"), _T("r"), stdin) != 0) {
+				FreeConsole();
+				m_hWindow = nullptr;
 				return false;
 			}
 
-			if (_tfreopen_s(&m_IO.m_pOUT, _T("nul"), _T("w"), stdout)) {
+			if (_tfreopen_s(&tmp, _T("CONOUT$"), _T("w"), stdout) != 0) {
+				FreeConsole();
+				m_hWindow = nullptr;
 				return false;
 			}
+
+			if (_tfreopen_s(&tmp, _T("CONOUT$"), _T("w"), stderr) != 0) {
+				FreeConsole();
+				m_hWindow = nullptr;
+				return false;
+			}
+
+			setvbuf(stdin, nullptr, _IONBF, 0);
+			setvbuf(stdout, nullptr, _IONBF, 0);
+			setvbuf(stderr, nullptr, _IONBF, 0);
+
+			m_IO.m_pIN = stdin;
+			m_IO.m_pOUT = stdout;
 		}
 
-		const auto& hIN = GetStdHandle(STD_INPUT_HANDLE);
-		if (!hIN || (hIN == INVALID_HANDLE_VALUE)) {
+		m_NativeIO.m_hIN = GetStdHandle(STD_INPUT_HANDLE);
+		if (!m_NativeIO.m_hIN || (m_NativeIO.m_hIN == INVALID_HANDLE_VALUE)) {
+			FreeConsole();
+			m_hWindow = nullptr;
 			return false;
 		}
 
-		m_NativeIO.m_hIN = hIN;
-
-		if (bUpdateIO) {
-			const int nInDescriptor = _open_osfhandle(reinterpret_cast<intptr_t>(hIN), _O_TEXT);
-			if (nInDescriptor == -1) {
-				return false;
-			}
-
-			const auto& pIN = _tfdopen(nInDescriptor, _T("r"));
-			if (!pIN) {
-				return false;
-			}
-
-			m_IO.m_pIN = pIN;
-
-			if (_dup2(_fileno(pIN), _fileno(stdin)) != 0) {
-				return false;
-			}
-
-			if (setvbuf(stdin, nullptr, _IONBF, 0) != 0) {
-				return false;
-			}
-		}
-
-		const auto& hOUT = GetStdHandle(STD_OUTPUT_HANDLE);
-		if (!hOUT || (hOUT == INVALID_HANDLE_VALUE)) {
+		m_NativeIO.m_hOUT = GetStdHandle(STD_OUTPUT_HANDLE);
+		if (!m_NativeIO.m_hOUT || (m_NativeIO.m_hOUT == INVALID_HANDLE_VALUE)) {
+			FreeConsole();
+			m_hWindow = nullptr;
 			return false;
-		}
-
-		m_NativeIO.m_hOUT = hOUT;
-
-		if (bUpdateIO) {
-			const int nOutDescriptor = _open_osfhandle(reinterpret_cast<intptr_t>(hOUT), _O_TEXT);
-			if (nOutDescriptor == -1) {
-				return false;
-			}
-
-			const auto& pOUT = _tfdopen(nOutDescriptor, _T("w"));
-			if (!pOUT) {
-				return false;
-			}
-
-			m_IO.m_pOUT = pOUT;
-
-			if (_dup2(_fileno(pOUT), _fileno(stdout)) != 0) {
-				return false;
-			}
-
-			if (setvbuf(stdout, nullptr, _IONBF, 0) != 0) {
-				return false;
-			}
 		}
 
 		_tsetlocale(LC_ALL, _T(""));
 
-		if (m_NativeIO.m_hIN && (m_NativeIO.m_hIN != INVALID_HANDLE_VALUE)) {
-			if (GetConsoleMode(m_NativeIO.m_hIN, &m_Data.m_unMode)) {
-				SetConsoleMode(m_NativeIO.m_hIN, m_Data.m_unMode | ENABLE_INSERT_MODE);
-			}
+		if (GetConsoleMode(m_NativeIO.m_hIN, &m_Data.m_unMode)) {
+			SetConsoleMode(m_NativeIO.m_hIN, m_Data.m_unMode | ENABLE_INSERT_MODE);
 		}
 
 		const LONG nStyle = GetWindowLong(m_hWindow, GWL_STYLE);
@@ -203,37 +177,35 @@ namespace Terminal {
 			SetConsoleMode(m_NativeIO.m_hIN, m_Data.m_unMode);
 		}
 
-		if (m_IO.m_pIN) {
-			if (_tfreopen_s(&m_IO.m_pIN, _T("nul"), _T("r"), stdin)) {
-				return false;
-			}
-
-			if (m_IO.m_pIN) {
-				fclose(m_IO.m_pIN);
-				m_IO.m_pIN = nullptr;
-			}
+		{
+			FILE* tmp = nullptr;
+			_tfreopen_s(&tmp, _T("nul"), _T("r"), stdin);
+			_tfreopen_s(&tmp, _T("nul"), _T("w"), stdout);
+			_tfreopen_s(&tmp, _T("nul"), _T("w"), stderr);
+			setvbuf(stdin, nullptr, _IONBF, 0);
+			setvbuf(stdout, nullptr, _IONBF, 0);
+			setvbuf(stderr, nullptr, _IONBF, 0);
 		}
 
-		if (m_IO.m_pOUT) {
-			if (_tfreopen_s(&m_IO.m_pOUT, _T("nul"), _T("w"), stdout)) {
-				return false;
-			}
-
-			if (m_IO.m_pOUT) {
-				fclose(m_IO.m_pOUT);
-				m_IO.m_pOUT = nullptr;
-			}
+		if (m_IO.m_pIN && (m_IO.m_pIN != stdin) && (m_IO.m_pIN != stdout) && (m_IO.m_pIN != stderr)) {
+			fclose(m_IO.m_pIN);
 		}
+
+		m_IO.m_pIN = nullptr;
+
+		if (m_IO.m_pOUT && (m_IO.m_pOUT != stdin) && (m_IO.m_pOUT != stdout) && (m_IO.m_pOUT != stderr)) {
+			fclose(m_IO.m_pOUT);
+		}
+
+		m_IO.m_pOUT = nullptr;
 
 		if (!FreeConsole()) {
 			return false;
 		}
 
-		if (!DestroyWindow(m_hWindow)) {
-			return false;
-		}
-
 		m_hWindow = nullptr;
+		m_NativeIO.m_hIN = nullptr;
+		m_NativeIO.m_hOUT = nullptr;
 
 		return true;
 	}
@@ -243,9 +215,7 @@ namespace Terminal {
 			return false;
 		}
 
-		if (!ShowWindow(m_hWindow, SW_SHOW)) {
-			return false;
-		}
+		ShowWindow(m_hWindow, SW_SHOW);
 
 		return true;
 	}
@@ -255,9 +225,7 @@ namespace Terminal {
 			return false;
 		}
 
-		if (!ShowWindow(m_hWindow, SW_HIDE)) {
-			return false;
-		}
+		ShowWindow(m_hWindow, SW_HIDE);
 
 		return true;
 	}
@@ -2556,7 +2524,7 @@ namespace Terminal {
 
 		memset(MessagePtr.get(), 0, sizeof(TerminalMessage));
 
-		MessagePtr->SetAction(TERMINAL_MESSAGE_ACTION::ACTION_SETCURSORPOSITION);
+		MessagePtr->SetAction(TERMINAL_MESSAGE_ACTION::ACTION_ERASE);
 
 		struct _ERASE {
 			COORD m_CursorPosition;

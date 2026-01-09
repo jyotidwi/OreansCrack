@@ -505,8 +505,7 @@ void __stdcall VM_Hook(unsigned char unIndex, unsigned int* pData) {
 		}
 
 		case 0x37: { // License Info
-			//pData[10] = reinterpret_cast<unsigned int>(L"RenardDev (Developer License)");
-			pData[10] = reinterpret_cast<unsigned int>(L"RenardDev (Cracked License)");
+			pData[10] = reinterpret_cast<unsigned int>(L"RenardDev (Developer License)");
 			return;
 		}
 
@@ -575,7 +574,6 @@ static void* GetVirtualProtectAddress() { return GetFromKernel32OrBase("VirtualP
 static void* GetVirtualAllocAddress() { return GetFromKernel32OrBase("VirtualAlloc"); }
 static void* GetVirtualFreeAddress() { return GetFromKernel32OrBase("VirtualFree"); }
 
-
 static void* GetForegroundWindowAddress() {
 	HMODULE hUser32 = GetModuleHandle(_T("user32.dll"));
 	return hUser32 ? GetProcAddress(hUser32, "GetForegroundWindow") : nullptr;
@@ -622,7 +620,6 @@ static void* GetNtUnmapViewOfSectionAddress() {
 	return ntdll ? GetProcAddress(ntdll, "NtUnmapViewOfSection") : nullptr;
 }
 
-
 DEFINE_INLINE_HOOK(
 	LdrLoadDll,
 	IsAvailable,
@@ -631,9 +628,6 @@ DEFINE_INLINE_HOOK(
 	NTAPI,
 	PWSTR PathToFile, ULONG Flags, PUNICODE_STRING ModuleFileName, PHANDLE ModuleHandle
 ) {
-	
-
-
 	//LOG_INFO(_T("LdrLoadDll CALLED (ID=%lu) ModuleFileName=`%s` from 0x%08X (RVA: 0x%08X)\n"), GetCurrentThreadId(), ModuleFileName ? ModuleFileName->Buffer : L"", (unsigned int)_ReturnAddress(), (unsigned int)_ReturnAddress() - (unsigned int)g_pSelf);
 
 	static bool bOnce = false;

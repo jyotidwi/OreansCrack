@@ -99,7 +99,7 @@ typedef struct _LOADER_DATA {
 
 // General definitions
 
-#define OREANSCRACK_VERSION "4.0.0"
+#define OREANSCRACK_VERSION "4.1.0"
 
 #define ProcessDebugObjectHandle static_cast<PROCESSINFOCLASS>(0x1E)
 #define ProcessDebugFlags static_cast<PROCESSINFOCLASS>(0x1F)
@@ -2866,10 +2866,18 @@ bool OreansCrackList() {
 		HKEY hSubKey = nullptr;
 		if (RegOpenKeyEx(hKey, szSubKeyName, 0, KEY_READ, &hSubKey) == ERROR_SUCCESS) {
 			DWORD unType = 0;
+
 			TCHAR szDebuggerValue[MAX_PATH] {};
 			DWORD unDebuggerValueSize = sizeof(szDebuggerValue);
+
+			bool bHasDebugger = false;
+
 			if ((RegQueryValueEx(hSubKey, _T("Debugger"), nullptr, &unType, reinterpret_cast<LPBYTE>(szDebuggerValue), &unDebuggerValueSize) == ERROR_SUCCESS) && (unType == REG_SZ) && (unDebuggerValueSize > sizeof(TCHAR))) {
-				_tprintf_s(_T("> %s: %s\n"), szSubKeyName, szDebuggerValue);
+				bHasDebugger = true;
+			}
+
+			if (bHasDebugger) {
+				_tprintf_s(_T("> %s : %s\n"), szSubKeyName, szDebuggerValue);
 			}
 
 			RegCloseKey(hSubKey);
@@ -2882,6 +2890,7 @@ bool OreansCrackList() {
 	RegCloseKey(hKey);
 	return true;
 }
+
 bool OreansCrackAdd(const TCHAR* szFileName) {
 	if (!szFileName) {
 		return false;
@@ -2923,10 +2932,16 @@ bool OreansCrackAdd(const TCHAR* szFileName) {
 	if (RegSetValueEx(hKey, _T("Debugger"), 0, REG_SZ, reinterpret_cast<const BYTE*>(as.Buffer), as.Length + 1) != ERROR_SUCCESS) {
 #endif
 		_tprintf_s(_T("ERROR: RegSetValueEx (Error = 0x%08X)\n"), GetLastError());
+#ifndef _UNICODE
+		RtlFreeAnsiString(&as);
+#endif
 		RegCloseKey(hKey);
 		return false;
 	}
 
+#ifndef _UNICODE
+	RtlFreeAnsiString(&as);
+#endif
 	RegCloseKey(hKey);
 	return true;
 }
@@ -2949,6 +2964,7 @@ bool OreansCrackRemove(const TCHAR* szFileName) {
 	}
 
 	RegDeleteValue(hKey, _T("Debugger"));
+
 	RegCloseKey(hKey);
 
 	hKey = nullptr;
@@ -3139,7 +3155,6 @@ int _tmain(int argc, PTCHAR argv[], PTCHAR envp[]) {
 			_tprintf_s(_T("SUCCESS!\n"));
 			return EXIT_SUCCESS;
 		}
-
 
 		if (!OreansCrackRemove(_T("WinLicense64.exe"))) {
 			return EXIT_FAILURE;

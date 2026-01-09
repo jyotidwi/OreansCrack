@@ -188,6 +188,7 @@
     <ClCompile Include="Terminal\Terminal.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="CompileStackString.h" />
     <ClInclude Include="Detours\Detours.h" />
     <ClInclude Include="Terminal\Terminal.h" />
   </ItemGroup>
